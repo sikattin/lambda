@@ -62,8 +62,7 @@ def lambda_handler(event, context):
     to_addr = str(event['Result']['to_addr'])
     subject = str(event['Result']['subject'])
     body = str(event['Result']['body'])
-    body += "\r\n"
     if event['Result']['status_code'] != 200:
-        body = json.dumps(event['Error'], indent=4)
+        body += json.dumps(event['Error'], indent=4)
     res = send_mail(from_addr, to_addr, subject, body)
     return res
