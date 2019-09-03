@@ -78,7 +78,7 @@ def init_dbinfos(dbname: str):
     global totalmetrics
     match = re.match(r"(.+)(\d+)$", dbname)
     if match:
-        dbname = "{0}-{1}".format(match.group(1), str((int(match.group(2)) + 1)))
+        dbname = "{0}{1}".format(match.group(1), str((int(match.group(2)) + 1)))
     else:
         dbname = "{0}-2".format(dbname)
     dbody = {"widgets": []}
@@ -140,21 +140,21 @@ def add_metrics_to_widget(widget_body: dict, metrics: list):
             title = "{0} 2".format(widget_body["properties"]["title"])
         widget = create_widget(title, metrics)
         return widget
-
-    metrics_num = len(widget_body["properties"]["metrics"])
+    lastid = int(re.match(r"\w(\d+)", widget_body['properties']['metrics'][-1][-1]['id']).group(1))
+    # metrics_num = len(widget_body["properties"]["metrics"])
     for i, metric in enumerate(metrics):
         widget_body["properties"]["metrics"].append(["AWS/EBS",
                                                      metric["DimensionName"],
                                                      "VolumeId",
                                                      metric["VolumeId"],
-                                                     {"id": "m{0}".format((metrics_num + 1)),
+                                                     {"id": "m{0}".format((lastid + 1)),
                                                       "label": metric["VolumeId"]
                                                      }])
         widget_body["properties"]["metrics"].append([{
-                "expression": "SUM(METRICS('m{0}'))/300".format((metrics_num + 1)),
+                "expression": "SUM(METRICS('m{0}'))/300".format((lastid + 1)),
                 "label": metric["VolumeId"],
-                "id": "e{0}".format((metrics_num + 1))}])
-        metrics_num += 1
+                "id": "e{0}".format((lastid + 1))}])
+        lastid += 1
     return widget_body
 
 def is_limit_regmetrics(widget: dict, metrics: list):
@@ -198,6 +198,7 @@ def lambda_handler(event, context):
             volid = msgbody['resources'][0].split("/")[1]
             newwidget = dict()
             reged_widgets = get_metrics_template()
+            totalmetrics_reg = 0
             client = init_cwclient()
 
             logger.info("DashboardPrefix: {0}, VolumeId: {1}".format(dbname_prefix, volid))
@@ -236,7 +237,10 @@ def lambda_handler(event, context):
                     continue
                 dbody["widgets"].append(widget)
             # checking for dashboard limits
-            if totalmetrics >= (MAX_METRICS_DBOARD):
+            totalmetrics_reg = sum(
+                [len(reged_widgets[key]['metrics']) for key in reged_widgets.keys()]
+            )
+            if (totalmetrics + totalmetrics_reg) >= MAX_METRICS_DBOARD:
                 dbname = init_dbinfos(dbname)
                 logger.info("Create a new dashboard {0}".format(dbname))
                 reged_widgets = get_metrics_template()
@@ -259,10 +263,10 @@ def lambda_handler(event, context):
                 totalmetrics += (len(metrics) * 2)
                 logger.info("total metrics will {0}".format(totalmetrics))
                 # checking dashboard limits
-                if (totalmetrics + (len(metrics)*2)) > MAX_METRICS_DBOARD:
-                    client.put_dashboard(DashboardName=dbname,
-                                            DashboardBody=dbody)
-                    dbname = init_dbinfos(dbname)
+                #if (totalmetrics + (len(metrics)*2)) > MAX_METRICS_DBOARD:
+                #    client.put_dashboard(DashboardName=dbname,
+                #                            DashboardBody=dbody)
+                #    dbname = init_dbinfos(dbname)
                 # create a new widget if its does not exists
                 if widget_num == 0:
                     newwidget = create_widget(key, val["metrics"])
